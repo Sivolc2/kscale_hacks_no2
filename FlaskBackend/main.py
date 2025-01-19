@@ -9,6 +9,7 @@ import json
 import os
 import time
 import math
+from datetime import datetime
 from templates import LANDING_PAGE
 
 app = Flask(__name__)
@@ -19,6 +20,13 @@ validator = HandValidator('validation.csv')
 ik_processor = HandIK(connect_robot=False)  # Don't connect to robot for IK processing
 robot_controller = None  # Initialize later if robot control is enabled
 sim_processor = SimProcessor()  # Initialize the simulation processor
+
+def log_request(endpoint, data=None):
+    """Log incoming requests with timestamp and data."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    print(f"\n[{timestamp}] Received request to {endpoint}")
+    if data:
+        print(f"Request data: {json.dumps(data, indent=2)}")
 
 def generate_circular_motion():
     """Generate circular motion data for the robot arm."""
@@ -155,6 +163,8 @@ def test_simbot_move():
 @app.route('/move_simbot', methods=['POST'])
 def move_simbot():
     """Process movement request and return updated position."""
+    log_request('/move_simbot', request.get_json() if request.is_json else None)
+    
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
     
@@ -173,35 +183,36 @@ def move_simbot():
 @app.route('/get_simbot_position', methods=['GET'])
 def get_simbot_position():
     """Get the current position of the simulated robot."""
+    log_request('/get_simbot_position')
+    
     try:
         position = sim_processor.get_current_position()
         return jsonify(position), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@app.route('/get_headset_cache', methods=['GET'])
+def get_headset_cache():
+    """Get the last 10 headset requests and their results."""
+    log_request('/get_headset_cache')
+    
+    try:
+        cached_requests = sim_processor.get_cached_requests()
+        return jsonify({
+            "cache_size": len(cached_requests),
+            "cached_requests": cached_requests
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "details": "Error retrieving cached requests"
+        }), 400
+
 @app.route('/move_simbot_headset', methods=['POST'])
 def move_simbot_headset():
-    """Process complex hand tracking data and move the simulated robot.
+    """Process complex hand tracking data and move the simulated robot."""
+    log_request('/move_simbot_headset', request.get_json() if request.is_json else None)
     
-    Expects data in the format:
-    {
-        "timestamp": "2025-01-18T18:30:00Z",
-        "hands": {
-            "left_hand": {
-                "points": [
-                    {"id": 0, "name": "handWrist", "x": 0.1, "y": 0.2, "z": 0.3},
-                    ...
-                ]
-            },
-            "right_hand": {
-                "points": [
-                    {"id": 0, "name": "handWrist", "x": 0.1, "y": 0.2, "z": 0.3},
-                    ...
-                ]
-            }
-        }
-    }
-    """
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
     
