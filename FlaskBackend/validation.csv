@@ -1,0 +1,7 @@
+point_name,min_x,max_x,min_y,max_y,min_z,max_z
+handWrist,0.0,2.0,0.0,2.0,0.0,2.0
+handThumbTip,0.0,2.0,0.0,2.0,0.0,2.0
+handIndexFingerTip,0.0,2.0,0.0,2.0,0.0,2.0
+handMiddleFingerTip,0.0,2.0,0.0,2.0,0.0,2.0
+handRingFingerTip,0.0,2.0,0.0,2.0,0.0,2.0
+handLittleFingerTip,0.0,2.0,0.0,2.0,0.0,2.0 

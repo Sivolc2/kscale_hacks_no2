@@ -1,49 +1,62 @@
 import pandas as pd
-import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 
 class HandValidator:
-    def __init__(self, ruleset_path: str):
-        self.rules = pd.read_csv(ruleset_path)
-        self.rules.set_index('joint_name', inplace=True)
-    
-    def calculate_angle(self, p1: Dict, p2: Dict, p3: Dict) -> float:
-        """Calculate angle between three points in 3D space"""
-        v1 = np.array([p1['x'] - p2['x'], p1['y'] - p2['y'], p1['z'] - p2['z']])
-        v2 = np.array([p3['x'] - p2['x'], p3['y'] - p2['y'], p3['z'] - p2['z']])
+    def __init__(self, rules_file: str):
+        """Initialize the validator with rules from a CSV file.
         
-        cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-        angle = np.arccos(np.clip(cos_angle, -1.0, 1.0))
-        return np.degrees(angle)
+        Args:
+            rules_file (str): Path to the CSV file containing validation rules
+        """
+        self.rules = pd.read_csv(rules_file)
+        # Convert rules to a dictionary for faster lookup
+        self.rules_dict = self.rules.set_index('point_name').to_dict('index')
     
-    def validate_hand(self, hand_data: Dict) -> Tuple[bool, List[Dict]]:
-        points = {point['name']: point for point in hand_data['points']}
+    def validate_point(self, point: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """Validate a single point against the rules.
+        
+        Args:
+            point (dict): Point data containing name and coordinates
+            
+        Returns:
+            tuple: (is_valid, list of violations)
+        """
         violations = []
+        point_name = point['name']
         
-        # Define joint chains for angle calculations
-        joint_chains = {
-            'handThumbKnuckle': ('handWrist', 'handThumbKnuckle', 'handThumbIntermediateBase'),
-            'handThumbIntermediateBase': ('handThumbKnuckle', 'handThumbIntermediateBase', 'handThumbIntermediateTip'),
-            'handThumbIntermediateTip': ('handThumbIntermediateBase', 'handThumbIntermediateTip', 'handThumbTip'),
-            # Add more joint chains for other fingers...
-        }
+        # Skip validation if point is not in rules
+        if point_name not in self.rules_dict:
+            return True, []
+            
+        rules = self.rules_dict[point_name]
         
-        for joint_name, (p1_name, p2_name, p3_name) in joint_chains.items():
-            if joint_name in self.rules.index:
-                angle = self.calculate_angle(
-                    points[p1_name],
-                    points[p2_name],
-                    points[p3_name]
-                )
-                
-                min_angle = self.rules.loc[joint_name, 'min_angle_degrees']
-                max_angle = self.rules.loc[joint_name, 'max_angle_degrees']
-                
-                if angle < min_angle or angle > max_angle:
-                    violations.append({
-                        'joint': joint_name,
-                        'calculated_angle': angle,
-                        'allowed_range': f'{min_angle} to {max_angle}'
-                    })
+        # Check X coordinate
+        if point['x'] < rules['min_x'] or point['x'] > rules['max_x']:
+            violations.append(f"{point_name} x-coordinate {point['x']} is outside range [{rules['min_x']}, {rules['max_x']}]")
+            
+        # Check Y coordinate
+        if point['y'] < rules['min_y'] or point['y'] > rules['max_y']:
+            violations.append(f"{point_name} y-coordinate {point['y']} is outside range [{rules['min_y']}, {rules['max_y']}]")
+            
+        # Check Z coordinate
+        if point['z'] < rules['min_z'] or point['z'] > rules['max_z']:
+            violations.append(f"{point_name} z-coordinate {point['z']} is outside range [{rules['min_z']}, {rules['max_z']}]")
+            
+        return len(violations) == 0, violations
+    
+    def validate_hand(self, hand_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """Validate all points in a hand against the rules.
         
-        return len(violations) == 0, violations 
+        Args:
+            hand_data (dict): Hand data containing points
+            
+        Returns:
+            tuple: (is_valid, list of violations)
+        """
+        all_violations = []
+        
+        for point in hand_data['points']:
+            is_valid, violations = self.validate_point(point)
+            all_violations.extend(violations)
+            
+        return len(all_violations) == 0, all_violations 
