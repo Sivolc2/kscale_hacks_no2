@@ -10,3 +10,4 @@ aiortc
 pytest
 grpcio
 pykos
+pyserial
