@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="container">
+        <div id="scene-container"></div>
+        <div id="controls">
+            <input type="file" id="urdf-input" accept=".urdf" style="display: none">
+            <button id="load-urdf-btn">Load URDF</button>
+            <button id="validate-btn">Update Robot Pose</button>
+            <div id="status"></div>
+        </div>
+    </div>
+    <script type="module" src="main.js"></script>
+</body>
+</html> 

@@ -1,5 +1,10 @@
-
+Frontend/robot
 backend_env
+Frontend/node_modules/
+Frontend/package-lock.json
+Frontend/robot/
+package-lock.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

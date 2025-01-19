@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, Response
 from flask_cors import CORS
 from hand_validator import HandValidator
 from hand_ik import HandIK
@@ -6,6 +6,8 @@ from robot_control import RobotController
 import argparse
 import json
 import os
+import time
+import math
 from templates import LANDING_PAGE
 
 app = Flask(__name__)
@@ -15,6 +17,49 @@ CORS(app)
 validator = HandValidator('validation.csv')
 ik_processor = HandIK(connect_robot=False)  # Don't connect to robot for IK processing
 robot_controller = None  # Initialize later if robot control is enabled
+
+def generate_circular_motion():
+    """Generate circular motion data for the robot arm."""
+    radius = 20  # radius of the circle
+    center_x, center_y = 0, 0  # center of the circle
+    angular_speed = 1  # radians per second
+    
+    while True:
+        current_time = time.time()
+        angle = (current_time * angular_speed) % (2 * math.pi)
+        
+        # Calculate position on circle
+        x = center_x + radius * math.cos(angle)
+        y = center_y + radius * math.sin(angle)
+        z = 30  # constant height
+        
+        # Create pose data
+        pose_data = {
+            "pose": {
+                "rightArm": {
+                    "x": x,
+                    "y": y,
+                    "z": z
+                }
+            },
+            "timestamp": current_time
+        }
+        
+        yield f"data: {json.dumps(pose_data)}\n\n"
+        time.sleep(0.05)  # 20Hz update rate
+
+@app.route('/stream_motion')
+def stream_motion():
+    """Stream circular motion data as Server-Sent Events (SSE)."""
+    return Response(
+        generate_circular_motion(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
+        }
+    )
 
 @app.route('/')
 def index():
