@@ -16,6 +16,7 @@ def validate_hands():
     
     try:
         data = request.get_json()
+        source_file = request.headers.get('X-Source-File', 'unknown')
         
         # Validate both hands
         results = {}
@@ -31,7 +32,9 @@ def validate_hands():
                 if app.config['ENABLE_IK']:
                     ik_results = ik_processor.process_hand(
                         data['hands'][hand_key], 
-                        plot=app.config['PLOT_IK']
+                        plot=app.config['PLOT_IK'],
+                        hand_id=hand_key.split('_')[0],  # 'left' or 'right'
+                        source_file=source_file
                     )
                     results[hand_key]['ik_results'] = ik_results
         

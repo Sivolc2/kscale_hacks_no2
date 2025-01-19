@@ -1,0 +1,36 @@
+{
+    "timestamp": "2025-01-18T18:30:00Z",
+    "hands": {
+      "left_hand": {
+        "points": [
+          { "id": 0, "name": "handWrist", "x": 0.102, "y": 0.198, "z": 0.302 },
+          { "id": 1, "name": "handThumbKnuckle", "x": 0.152, "y": 0.248, "z": 0.345 },
+          { "id": 2, "name": "handThumbIntermediateBase", "x": 0.201, "y": 0.299, "z": 0.402 },
+          { "id": 3, "name": "handThumbIntermediateTip", "x": 0.249, "y": 0.348, "z": 0.455 },
+          { "id": 4, "name": "handThumbTip", "x": 0.303, "y": 0.405, "z": 0.505 },
+          { "id": 5, "name": "handIndexFingerMetacarpal", "x": 0.352, "y": 0.455, "z": 0.553 },
+          { "id": 6, "name": "handIndexFingerKnuckle", "x": 0.403, "y": 0.502, "z": 0.602 },
+          { "id": 7, "name": "handIndexFingerIntermediateBase", "x": 0.452, "y": 0.548, "z": 0.653 },
+          { "id": 8, "name": "handIndexFingerIntermediateTip", "x": 0.503, "y": 0.598, "z": 0.702 },
+          { "id": 9, "name": "handIndexFingerTip", "x": 0.554, "y": 0.646, "z": 0.752 },
+          { "id": 10, "name": "handMiddleFingerMetacarpal", "x": 0.604, "y": 0.701, "z": 0.803 },
+          { "id": 11, "name": "handMiddleFingerKnuckle", "x": 0.653, "y": 0.748, "z": 0.852 },
+          { "id": 12, "name": "handMiddleFingerIntermediateBase", "x": 0.703, "y": 0.803, "z": 0.901 },
+          { "id": 13, "name": "handMiddleFingerIntermediateTip", "x": 0.754, "y": 0.851, "z": 0.952 },
+          { "id": 14, "name": "handMiddleFingerTip", "x": 0.803, "y": 0.902, "z": 1.002 },
+          { "id": 15, "name": "handRingFingerMetacarpal", "x": 0.853, "y": 0.949, "z": 1.052 },
+          { "id": 16, "name": "handRingFingerKnuckle", "x": 0.902, "y": 1.001, "z": 1.102 },
+          { "id": 17, "name": "handRingFingerIntermediateBase", "x": 0.954, "y": 1.051, "z": 1.154 },
+          { "id": 18, "name": "handRingFingerIntermediateTip", "x": 1.004, "y": 1.102, "z": 1.201 },
+          { "id": 19, "name": "handRingFingerTip", "x": 1.054, "y": 1.148, "z": 1.253 },
+          { "id": 20, "name": "handLittleFingerMetacarpal", "x": 1.105, "y": 1.202, "z": 1.304 },
+          { "id": 21, "name": "handLittleFingerKnuckle", "x": 1.152, "y": 1.251, "z": 1.353 },
+          { "id": 22, "name": "handLittleFingerIntermediateBase", "x": 1.202, "y": 1.304, "z": 1.402 },
+          { "id": 23, "name": "handLittleFingerIntermediateTip", "x": 1.253, "y": 1.352, "z": 1.453 },
+          { "id": 24, "name": "handLittleFingerTip", "x": 1.302, "y": 1.401, "z": 1.503 },
+          { "id": 25, "name": "handForearmWrist", "x": 1.352, "y": 1.453, "z": 1.553 },
+          { "id": 26, "name": "handForearmArm", "x": 1.401, "y": 1.502, "z": 1.603 }
+        ]
+      }
+  }
+}
