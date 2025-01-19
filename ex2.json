@@ -1,0 +1,36 @@
+{
+    "timestamp": "2025-01-18T18:30:00Z",
+    "hands": {
+      "left_hand": {
+        "points": [
+          { "id": 0, "name": "handWrist", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 1, "name": "handThumbKnuckle", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 2, "name": "handThumbIntermediateBase", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 3, "name": "handThumbIntermediateTip", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 4, "name": "handThumbTip", "x": 0.3, "y": 0.4, "z": 0.5 },
+          { "id": 5, "name": "handIndexFingerMetacarpal", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 6, "name": "handIndexFingerKnuckle", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 7, "name": "handIndexFingerIntermediateBase", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 8, "name": "handIndexFingerIntermediateTip", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 9, "name": "handIndexFingerTip", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 10, "name": "handMiddleFingerMetacarpal", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 11, "name": "handMiddleFingerKnuckle", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 12, "name": "handMiddleFingerIntermediateBase", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 13, "name": "handMiddleFingerIntermediateTip", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 14, "name": "handMiddleFingerTip", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 15, "name": "handRingFingerMetacarpal", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 16, "name": "handRingFingerKnuckle", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 17, "name": "handRingFingerIntermediateBase", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 18, "name": "handRingFingerIntermediateTip", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 19, "name": "handRingFingerTip", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 20, "name": "handLittleFingerMetacarpal", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 21, "name": "handLittleFingerKnuckle", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 22, "name": "handLittleFingerIntermediateBase", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 23, "name": "handLittleFingerIntermediateTip", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 24, "name": "handLittleFingerTip", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 25, "name": "handForearmWrist", "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "id": 26, "name": "handForearmArm", "x": 0.0, "y": 0.0, "z": 0.0 }
+        ]
+      }
+  }
+}
