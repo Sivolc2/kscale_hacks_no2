@@ -18,6 +18,8 @@ class RobotVisualizer {
         this.defaultRobot = new THREE.Group();
         this.parts = {};
         this.streamConnection = null;
+        this.isAvailable = false;
+        this.positionPollInterval = null;
         
         this.init();
         this.setupControls();
@@ -270,6 +272,32 @@ class RobotVisualizer {
             this.setDefaultPose();
         }
     }
+
+    startAvailabilityMode() {
+        this.isAvailable = true;
+        // Start polling for position updates
+        this.positionPollInterval = setInterval(async () => {
+            try {
+                const response = await fetch(`${BACKEND_URL}/get_simbot_position`);
+                const data = await response.json();
+                if (data.pose) {
+                    this.updateRobotPose(data.pose);
+                }
+            } catch (error) {
+                console.error('Error polling position:', error);
+            }
+        }, 100); // Poll every 100ms
+        document.getElementById('status').textContent = 'Robot available for movement';
+    }
+
+    stopAvailabilityMode() {
+        this.isAvailable = false;
+        if (this.positionPollInterval) {
+            clearInterval(this.positionPollInterval);
+            this.positionPollInterval = null;
+        }
+        document.getElementById('status').textContent = 'Robot unavailable';
+    }
 }
 
 // Initialize the visualizer
@@ -295,6 +323,25 @@ document.getElementById('urdf-input').addEventListener('change', (event) => {
     }
 });
 
+// Get the controls container once
+const controlsContainer = document.getElementById('controls');
+
+// Add availability mode toggle button
+const availabilityButton = document.createElement('button');
+availabilityButton.textContent = 'Start Availability Mode';
+availabilityButton.addEventListener('click', () => {
+    if (availabilityButton.textContent === 'Start Availability Mode') {
+        visualizer.startAvailabilityMode();
+        availabilityButton.textContent = 'Stop Availability Mode';
+    } else {
+        visualizer.stopAvailabilityMode();
+        availabilityButton.textContent = 'Start Availability Mode';
+    }
+});
+
+// Insert the availability button at the start of controls
+controlsContainer.insertBefore(availabilityButton, controlsContainer.firstChild);
+
 // Add streaming control buttons
 const streamButton = document.createElement('button');
 streamButton.textContent = 'Start Streaming';
@@ -309,9 +356,56 @@ streamButton.addEventListener('click', () => {
 });
 
 // Insert the stream button before the validate button
-const controls = document.getElementById('controls');
 const validateBtn = document.getElementById('validate-btn');
-controls.insertBefore(streamButton, validateBtn);
+controlsContainer.insertBefore(streamButton, validateBtn);
+
+// Add test movement button
+const testMoveButton = document.createElement('button');
+testMoveButton.textContent = 'Test Move';
+testMoveButton.addEventListener('click', async () => {
+    if (!visualizer.isAvailable) {
+        document.getElementById('status').textContent = 'Error: Robot not available. Enable availability mode first.';
+        return;
+    }
+
+    const statusElement = document.getElementById('status');
+    statusElement.textContent = 'Moving robot...';
+    
+    try {
+        // Example movement data - moves both arms
+        const response = await fetch(`${BACKEND_URL}/move_simbot`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Source-File': 'web-visualizer'
+            },
+            body: JSON.stringify({
+                movement: {
+                    rightArm: {
+                        x: Math.random() * 50 - 25,  // Random position between -25 and 25
+                        y: Math.random() * 50 - 25,
+                        z: Math.random() * 30 + 20   // Random height between 20 and 50
+                    },
+                    leftArm: {
+                        x: Math.random() * 50 - 25,
+                        y: Math.random() * 50 - 25,
+                        z: Math.random() * 30 + 20
+                    }
+                }
+            })
+        });
+
+        const data = await response.json();
+        visualizer.updateRobotPose(data.pose);
+        statusElement.textContent = 'Robot moved';
+    } catch (error) {
+        statusElement.textContent = 'Error: ' + error.message;
+        console.error('Error:', error);
+    }
+});
+
+// Insert the test move button before the validate button
+controlsContainer.insertBefore(testMoveButton, validateBtn);
 
 // Setup the validate button
 document.getElementById('validate-btn').addEventListener('click', async () => {

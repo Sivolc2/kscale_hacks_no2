@@ -3,6 +3,7 @@ from flask_cors import CORS
 from hand_validator import HandValidator
 from hand_ik import HandIK
 from robot_control import RobotController
+from sim_processor import SimProcessor
 import argparse
 import json
 import os
@@ -17,6 +18,7 @@ CORS(app)
 validator = HandValidator('validation.csv')
 ik_processor = HandIK(connect_robot=False)  # Don't connect to robot for IK processing
 robot_controller = None  # Initialize later if robot control is enabled
+sim_processor = SimProcessor()  # Initialize the simulation processor
 
 def generate_circular_motion():
     """Generate circular motion data for the robot arm."""
@@ -133,6 +135,93 @@ def move_robot():
             "error": "Robot control is not enabled. Start server with --enable-robot flag."
         }), 400
     return robot_controller.move_robot()
+
+@app.route('/test_simbot_move', methods=['GET'])
+def test_simbot_move():
+    """Test endpoint with fixed coordinates to demonstrate processing."""
+    test_data = {
+        "movement": {
+            "rightArm": {"x": 75, "y": 30, "z": 80},  # Will be clamped
+            "leftArm": {"x": -20, "y": 15}  # Missing z will get default
+        }
+    }
+    
+    result = sim_processor.process_movement(test_data["movement"])
+    return jsonify({
+        "input": test_data,
+        "result": result
+    }), 200
+
+@app.route('/move_simbot', methods=['POST'])
+def move_simbot():
+    """Process movement request and return updated position."""
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 400
+    
+    try:
+        data = request.get_json()
+        movement_data = data.get('movement', {})
+        
+        # Process the movement data
+        result = sim_processor.process_movement(movement_data)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/get_simbot_position', methods=['GET'])
+def get_simbot_position():
+    """Get the current position of the simulated robot."""
+    try:
+        position = sim_processor.get_current_position()
+        return jsonify(position), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/move_simbot_headset', methods=['POST'])
+def move_simbot_headset():
+    """Process complex hand tracking data and move the simulated robot.
+    
+    Expects data in the format:
+    {
+        "timestamp": "2025-01-18T18:30:00Z",
+        "hands": {
+            "left_hand": {
+                "points": [
+                    {"id": 0, "name": "handWrist", "x": 0.1, "y": 0.2, "z": 0.3},
+                    ...
+                ]
+            },
+            "right_hand": {
+                "points": [
+                    {"id": 0, "name": "handWrist", "x": 0.1, "y": 0.2, "z": 0.3},
+                    ...
+                ]
+            }
+        }
+    }
+    """
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 400
+    
+    try:
+        data = request.get_json()
+        
+        # Basic validation of input format
+        if "hands" not in data:
+            return jsonify({"error": "Missing 'hands' data"}), 400
+            
+        # Process the headset data
+        result = sim_processor.process_headset_data(data)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "details": "Error processing headset data"
+        }), 400
 
 def run_server(enable_ik: bool = False, plot_ik: bool = False, 
               enable_robot: bool = False, robot_ip: str = '192.168.42.1',
