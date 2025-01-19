@@ -1,6 +1,12 @@
-flask==2.0.1
-werkzeug==2.0.3
-pandas==2.1.0
+flask
+werkzeug
+flask-cors
+pandas
 numpy
 requests
 ikpy[plot]
+opencv-python
+aiortc
+pytest
+grpcio
+pykos

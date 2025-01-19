@@ -3,20 +3,71 @@ from scipy.spatial.transform import Rotation
 from typing import Dict, List, Tuple, Optional
 import json
 import os
+import pykos
+
+# Mapping of joint names to IDs (copied from test_movement.py)
+ACTUATOR_NAME_TO_ID = {
+    "left_shoulder_yaw": 11,
+    "left_shoulder_pitch": 12,
+    "left_elbow_yaw": 13,
+    "left_gripper": 14,
+    "right_shoulder_yaw": 21,
+    "right_shoulder_pitch": 22,
+    "right_elbow_yaw": 23,
+    "right_gripper": 24,
+}
 
 class HandCalibration:
-    def __init__(self, calibration_file: str = 'calibration.json'):
+    def __init__(self, calibration_file: str = 'calibration.json', robot_ip: str = '192.168.42.1'):
         """Initialize calibration system
         
         Args:
             calibration_file: Path to calibration data file
+            robot_ip: IP address of the KOS robot
         """
         self.calibration_file = calibration_file
         self.transform_matrix = None
         self.scale_factors = None
         self.offset = None
-        self.load_calibration()
         
+        # Initialize KOS client
+        self.kos = pykos.KOS(ip=robot_ip)
+        self.setup_robot()
+        
+        self.load_calibration()
+    
+    def setup_robot(self):
+        """Configure robot actuators for calibration"""
+        # Configure left arm actuators
+        for actuator_id in [11, 12, 13]:  # left arm actuators
+            self.kos.actuator.configure_actuator(
+                actuator_id=actuator_id,
+                torque_enabled=True,
+                kp=120,
+                kd=10
+            )
+    
+    def get_robot_position(self) -> Dict[str, float]:
+        """Get current robot arm position from servo feedback
+        
+        Returns:
+            Dictionary with x,y,z coordinates calculated from joint positions
+        """
+        # Get current joint positions
+        actuator_ids = [11, 12, 13]  # left arm actuators
+        states = self.kos.actuator.get_actuators_state(actuator_ids)
+        
+        # TODO: Implement forward kinematics to convert joint angles to x,y,z position
+        # This is a simplified placeholder - you'll need to implement proper forward kinematics
+        positions = {state.actuator_id: state.position for state in states.states}
+        
+        # Simplified conversion - replace with actual forward kinematics
+        x = positions[11] * 0.3  # shoulder yaw contribution
+        y = positions[12] * 0.3  # shoulder pitch contribution
+        z = positions[13] * 0.3  # elbow contribution
+        
+        return {'x': x, 'y': y, 'z': z}
+    
     def load_calibration(self) -> None:
         """Load calibration data from file if it exists"""
         if os.path.exists(self.calibration_file):
@@ -36,14 +87,19 @@ class HandCalibration:
         with open(self.calibration_file, 'w') as f:
             json.dump(data, f, indent=2)
     
-    def calibrate(self, vr_points: List[Dict[str, float]], 
-                 robot_points: List[Dict[str, float]]) -> None:
-        """Perform calibration using corresponding points
+    def calibrate(self, vr_points: List[Dict[str, float]]) -> None:
+        """Perform calibration using VR points and current robot positions
         
         Args:
             vr_points: List of points from VR space
-            robot_points: List of corresponding points in robot space
         """
+        # Get corresponding robot points from servo feedback
+        robot_points = []
+        for _ in vr_points:
+            # Prompt user to move robot to corresponding position
+            input("Move robot to corresponding position and press Enter...")
+            robot_points.append(self.get_robot_position())
+        
         # Convert points to numpy arrays
         vr_array = np.array([[p['x'], p['y'], p['z']] for p in vr_points])
         robot_array = np.array([[p['x'], p['y'], p['z']] for p in robot_points])
