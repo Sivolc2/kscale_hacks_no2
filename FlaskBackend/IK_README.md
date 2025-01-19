@@ -132,85 +132,104 @@ python FlaskBackend/test_request.py --json_file example.json --enable-ik
 
 ## Robot Arm Forward Kinematics
 
-### Required Robot Parameters
-To implement accurate forward kinematics for the robot arm, we need:
+### Simplified Robot Configuration
+The robot arm is configured with a simplified setup focusing on wrist positioning and pincer control:
 
-1. **Link Lengths**:
-   - Shoulder to elbow length (l1)
-   - Elbow to wrist/end-effector length (l2)
+1. **End Effector (Pincer)**:
+   - Two-finger pincer gripper (actuator 14)
+   - Maps to user's thumb and index finger distance
+   - Gripper range: 0 (closed) to 1 (fully open)
 
-2. **Joint Configuration**:
-   - Shoulder yaw axis orientation (typically Z-axis rotation)
-   - Shoulder pitch axis orientation (typically Y-axis rotation)
-   - Elbow yaw axis orientation (typically Z-axis rotation)
+2. **Wrist Joint**:
+   - Maps to user's elbow position
+   - Single yaw rotation (actuator 13)
+   - Primary joint for position control
 
-3. **Joint Limits**:
-   - Min/max angles for each joint
-   - Shoulder yaw range (actuator 11)
-   - Shoulder pitch range (actuator 12)
-   - Elbow yaw range (actuator 13)
+3. **Base Reference**:
+   - Fixed base position
+   - Shoulder joint ignored in first iteration
+   - All positions relative to base frame
 
-4. **Zero Position Reference**:
-   - Default arm configuration when all joints are at 0
-   - Reference frame orientation
+### Required Parameters
+To implement the simplified kinematics:
 
-### Forward Kinematics Approach
-We will use the Denavit-Hartenberg (DH) parameters approach:
+1. **Physical Measurements**:
+   - Wrist to pincer tip length
+   - Pincer opening range (min/max distance between fingers)
 
-1. **Coordinate Frames**:
-   ```
-   Base (0) -> Shoulder Yaw (1) -> Shoulder Pitch (2) -> Elbow Yaw (3) -> End Effector (4)
-   ```
+2. **Joint Properties**:
+   - Wrist yaw range (actuator 13)
+   - Pincer opening range (actuator 14)
 
-2. **Transformation Matrices**:
-   - Each joint contributes a rotation and translation
-   - For shoulder yaw (θ1):
-     ```
-     R1 = Rz(θ1)  # Rotation around Z axis
-     ```
-   - For shoulder pitch (θ2):
-     ```
-     R2 = Ry(θ2)  # Rotation around Y axis
-     T2 = [l1, 0, 0]  # Translation along X
-     ```
-   - For elbow yaw (θ3):
-     ```
-     R3 = Rz(θ3)  # Rotation around Z axis
-     T3 = [l2, 0, 0]  # Translation along X
-     ```
+3. **Servo Properties**:
+   - Servo position to angle conversion for wrist
+   - Servo position to distance conversion for pincer
 
-3. **Final Position Calculation**:
+### Position Mapping Approach
+
+1. **Hand Position Tracking**:
    ```python
-   def forward_kinematics(theta1, theta2, theta3):
-       # Combine transformations
-       T_total = T0_1(theta1) @ T1_2(theta2) @ T2_3(theta3)
-       # Extract end effector position
-       position = T_total[0:3, 3]
-       return position
+   def get_robot_position(self) -> Dict[str, float]:
+       # Get wrist position from servo
+       wrist_state = self.kos.actuator.get_actuators_state([13])[0]
+       pincer_state = self.kos.actuator.get_actuators_state([14])[0]
+       
+       # Calculate end effector position based on wrist angle
+       wrist_angle = wrist_state.position  # in radians
+       x = L * cos(wrist_angle)  # L is wrist-to-tip length
+       y = L * sin(wrist_angle)
+       z = 0  # Simplified 2D movement for first iteration
+       
+       return {
+           'x': x,
+           'y': y,
+           'z': z,
+           'gripper_opening': pincer_state.position
+       }
    ```
 
-### Implementation Requirements
-To complete the forward kinematics implementation, please provide:
-
-1. Link lengths (l1, l2) in meters
-2. Joint angle ranges for each actuator
-3. Zero position configuration
-4. Confirmation of the axis orientations described above
-
-The current placeholder in `get_robot_position()` uses a simplified linear scaling:
-```python
-x = positions[11] * 0.3  # shoulder yaw
-y = positions[12] * 0.3  # shoulder pitch
-z = positions[13] * 0.3  # elbow yaw
-```
-
-This will be replaced with proper forward kinematics once the above parameters are confirmed.
+2. **VR to Robot Mapping**:
+   - Track user's thumb and index finger positions
+   - Calculate pincer opening from finger distance
+   - Map elbow position to wrist rotation
+   ```python
+   def vr_to_robot_mapping(thumb_pos, index_pos, elbow_pos):
+       # Calculate gripper opening from finger distance
+       finger_distance = distance(thumb_pos, index_pos)
+       gripper_value = scale_to_gripper_range(finger_distance)
+       
+       # Calculate wrist angle from elbow position
+       wrist_angle = calculate_wrist_angle(elbow_pos)
+       
+       return {
+           'wrist_angle': wrist_angle,
+           'gripper_value': gripper_value
+       }
+   ```
 
 ### Calibration Process
-1. Record VR points in various poses
-2. Move robot arm to matching positions
-3. Read joint angles from servos
-4. Calculate end-effector position using forward kinematics
-5. Use these positions for the calibration transform
+1. Record key poses:
+   - Elbow at center, fingers closed
+   - Elbow at extremes, fingers open
+   - Multiple points between extremes
 
-This approach will provide more accurate position mapping between VR and robot space compared to the current linear approximation. 
+2. For each calibration point:
+   - Record VR positions (thumb, index, elbow)
+   - Record robot positions (wrist angle, pincer opening)
+   - Calculate transformation matrix
+   - Validate mapping accuracy
+
+3. Save calibration:
+   - Wrist angle limits
+   - Pincer range mapping
+   - Position transformation matrix
+
+### Implementation Requirements
+To complete this simplified implementation, please provide:
+
+1. Wrist-to-tip length in meters
+2. Pincer opening range (min/max in meters)
+3. Wrist servo angle range
+4. Pincer servo position to opening distance conversion
+
+This simplified approach focuses on achieving accurate end-effector positioning and gripper control before adding shoulder joint complexity in future iterations. 

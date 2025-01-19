@@ -12,8 +12,13 @@ from datetime import datetime
 from hand_calibration import HandCalibration
 
 class HandIK:
-    def __init__(self, calibration_file: str = 'calibration.json'):
-        """Initialize the IK chains for fingers"""
+    def __init__(self, calibration_file: str = 'calibration.json', connect_robot: bool = False):
+        """Initialize the IK chains for fingers
+        
+        Args:
+            calibration_file: Path to calibration data file
+            connect_robot: Whether to connect to robot immediately
+        """
         self.fingers = {
             'thumb': self._create_thumb_chain(),
             'index': self._create_finger_chain('index'),
@@ -26,7 +31,7 @@ class HandIK:
         os.makedirs('plots', exist_ok=True)
         
         # Initialize calibration
-        self.calibration = HandCalibration(calibration_file)
+        self.calibration = HandCalibration(calibration_file, connect_robot=connect_robot)
         
     def calibrate(self, vr_points: List[Dict[str, float]], 
                  robot_points: List[Dict[str, float]]) -> Dict[str, float]:
@@ -91,21 +96,24 @@ class HandIK:
                 name="thumb_knuckle",
                 origin_translation=[0, 0, 0],
                 origin_orientation=[0, 0, 0],
-                rotation=[1, 1, 1]  # Allow rotation in all axes
+                rotation=[1, 1, 1],  # Allow rotation in all axes
+                bounds=(-np.pi, np.pi)
             ),
             URDFLink(
                 name="thumb_intermediate",
                 origin_translation=[0, 0, 0.02],  # 2cm length
                 origin_orientation=[0, 0, 0],
-                rotation=[0, 1, 0]  # Bend only
+                rotation=[0, 1, 0],  # Bend only
+                bounds=(-np.pi/2, np.pi/2)
             ),
             URDFLink(
                 name="thumb_tip",
                 origin_translation=[0, 0, 0.02],
                 origin_orientation=[0, 0, 0],
-                rotation=[0, 1, 0]
+                rotation=[0, 1, 0],
+                bounds=(-np.pi/2, np.pi/2)
             )
-        ])
+        ], active_links_mask=[False, True, True, True])  # Mark base as inactive
     
     def _create_finger_chain(self, name: str) -> Chain:
         """Create IK chain for a finger with 3 joints"""
@@ -115,21 +123,24 @@ class HandIK:
                 name=f"{name}_knuckle",
                 origin_translation=[0, 0, 0],
                 origin_orientation=[0, 0, 0],
-                rotation=[1, 1, 0]  # Allow flexion and abduction
+                rotation=[1, 1, 0],  # Allow flexion and abduction
+                bounds=(-np.pi, np.pi)
             ),
             URDFLink(
                 name=f"{name}_intermediate",
                 origin_translation=[0, 0, 0.03],  # 3cm length
                 origin_orientation=[0, 0, 0],
-                rotation=[0, 1, 0]  # Bend only
+                rotation=[0, 1, 0],  # Bend only
+                bounds=(-np.pi/2, np.pi/2)
             ),
             URDFLink(
                 name=f"{name}_tip",
                 origin_translation=[0, 0, 0.02],
                 origin_orientation=[0, 0, 0],
-                rotation=[0, 1, 0]
+                rotation=[0, 1, 0],
+                bounds=(-np.pi/2, np.pi/2)
             )
-        ])
+        ], active_links_mask=[False, True, True, True])  # Mark base as inactive
 
     def _get_plot_limits(self, points_by_finger: Dict[str, List[Dict[str, Any]]]) -> tuple:
         """Calculate appropriate axis limits based on hand points

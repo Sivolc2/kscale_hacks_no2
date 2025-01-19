@@ -18,26 +18,48 @@ ACTUATOR_NAME_TO_ID = {
 }
 
 class HandCalibration:
-    def __init__(self, calibration_file: str = 'calibration.json', robot_ip: str = '192.168.42.1'):
+    def __init__(self, calibration_file: str = 'calibration.json', robot_ip: str = '192.168.42.1', connect_robot: bool = False):
         """Initialize calibration system
         
         Args:
             calibration_file: Path to calibration data file
             robot_ip: IP address of the KOS robot
+            connect_robot: Whether to connect to the robot immediately
         """
         self.calibration_file = calibration_file
         self.transform_matrix = None
         self.scale_factors = None
         self.offset = None
+        self.robot_ip = robot_ip
+        self.kos = None
         
-        # Initialize KOS client
-        self.kos = pykos.KOS(ip=robot_ip)
-        self.setup_robot()
-        
+        if connect_robot:
+            self.connect_robot()
+            
         self.load_calibration()
+    
+    def connect_robot(self) -> bool:
+        """Connect to the robot if not already connected
+        
+        Returns:
+            bool: True if connection successful or already connected
+        """
+        if self.kos is not None:
+            return True
+            
+        try:
+            self.kos = pykos.KOS(ip=self.robot_ip)
+            self.setup_robot()
+            return True
+        except Exception as e:
+            print(f"Warning: Could not connect to robot: {e}")
+            return False
     
     def setup_robot(self):
         """Configure robot actuators for calibration"""
+        if self.kos is None:
+            raise RuntimeError("Robot not connected. Call connect_robot() first.")
+            
         # Configure left arm actuators
         for actuator_id in [11, 12, 13]:  # left arm actuators
             self.kos.actuator.configure_actuator(
@@ -53,6 +75,9 @@ class HandCalibration:
         Returns:
             Dictionary with x,y,z coordinates calculated from joint positions
         """
+        if self.kos is None:
+            raise RuntimeError("Robot not connected. Call connect_robot() first.")
+            
         # Get current joint positions
         actuator_ids = [11, 12, 13]  # left arm actuators
         states = self.kos.actuator.get_actuators_state(actuator_ids)

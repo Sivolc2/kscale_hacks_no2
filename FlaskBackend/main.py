@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 from hand_validator import HandValidator
 from hand_ik import HandIK
+from robot_control import RobotController
 import argparse
 import json
 import os
@@ -12,7 +13,8 @@ app = Flask(__name__)
 CORS(app)
 
 validator = HandValidator('validation.csv')
-ik_processor = HandIK()
+ik_processor = HandIK(connect_robot=False)  # Don't connect to robot for IK processing
+robot_controller = None  # Initialize later if robot control is enabled
 
 @app.route('/')
 def index():
@@ -21,7 +23,8 @@ def index():
         LANDING_PAGE,
         config={
             'ENABLE_IK': app.config.get('ENABLE_IK', False),
-            'PLOT_IK': app.config.get('PLOT_IK', False)
+            'PLOT_IK': app.config.get('PLOT_IK', False),
+            'ENABLE_ROBOT': app.config.get('ENABLE_ROBOT', False)
         }
     )
 
@@ -31,7 +34,8 @@ def health_check():
     return jsonify({
         "status": "healthy",
         "service": "hand-ik-server",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "robot_connected": robot_controller is not None
     })
 
 @app.route('/validate', methods=['POST', 'OPTIONS'])
@@ -76,10 +80,32 @@ def validate_hands():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-def run_server(enable_ik: bool = False, plot_ik: bool = False, port: int = 5001, host: str = '0.0.0.0', ssl_context=None):
+@app.route('/robot/move', methods=['POST', 'OPTIONS'])
+def move_robot():
+    """Direct robot control endpoint"""
+    if robot_controller is None:
+        return jsonify({
+            "error": "Robot control is not enabled. Start server with --enable-robot flag."
+        }), 400
+    return robot_controller.move_robot()
+
+def run_server(enable_ik: bool = False, plot_ik: bool = False, 
+              enable_robot: bool = False, robot_ip: str = '192.168.42.1',
+              port: int = 5001, host: str = '0.0.0.0', ssl_context=None):
     """Run the Flask server"""
     app.config['ENABLE_IK'] = enable_ik
     app.config['PLOT_IK'] = plot_ik
+    app.config['ENABLE_ROBOT'] = enable_robot
+    
+    # Initialize robot controller if enabled
+    global robot_controller
+    if enable_robot:
+        try:
+            robot_controller = RobotController(robot_ip)
+            print(f"Robot control enabled, connected to {robot_ip}")
+        except Exception as e:
+            print(f"Warning: Failed to connect to robot at {robot_ip}: {e}")
+            print("Robot control will be disabled")
     
     # Print server info
     protocol = "https" if ssl_context else "http"
@@ -88,10 +114,13 @@ def run_server(enable_ik: bool = False, plot_ik: bool = False, port: int = 5001,
     print(f"URL: {protocol}://{host}:{port}")
     print(f"IK Processing: {'Enabled' if enable_ik else 'Disabled'}")
     print(f"IK Plotting: {'Enabled' if plot_ik else 'Disabled'}")
+    print(f"Robot Control: {'Enabled' if robot_controller else 'Disabled'}")
     print("\nEndpoints:")
     print(f"- GET {protocol}://{host}:{port} : Documentation")
     print(f"- GET {protocol}://{host}:{port}/health : Health check")
     print(f"- POST {protocol}://{host}:{port}/validate : Hand validation and IK processing")
+    if robot_controller:
+        print(f"- POST {protocol}://{host}:{port}/robot/move : Direct robot control")
     print("\nPress Ctrl+C to stop the server")
     
     app.run(
@@ -104,6 +133,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hand validation and IK processing server')
     parser.add_argument('--enable-ik', action='store_true', help='Enable inverse kinematics processing')
     parser.add_argument('--plot-ik', action='store_true', help='Plot IK results (requires --enable-ik)')
+    parser.add_argument('--enable-robot', action='store_true', help='Enable robot control')
+    parser.add_argument('--robot-ip', default='192.168.42.1', help='Robot IP address')
     parser.add_argument('--port', type=int, default=5001, help='Port to run the server on')
     parser.add_argument('--host', default='0.0.0.0', help='Host to bind to')
     parser.add_argument('--ssl-cert', help='Path to SSL certificate file')
@@ -122,6 +153,8 @@ if __name__ == '__main__':
     run_server(
         enable_ik=args.enable_ik,
         plot_ik=args.plot_ik,
+        enable_robot=args.enable_robot,
+        robot_ip=args.robot_ip,
         port=args.port,
         host=args.host,
         ssl_context=ssl_context
