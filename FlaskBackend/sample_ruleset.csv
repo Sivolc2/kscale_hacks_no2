@@ -1,0 +1,16 @@
+joint_name,min_angle_degrees,max_angle_degrees
+handThumbKnuckle,-30,30
+handThumbIntermediateBase,-45,45
+handThumbIntermediateTip,0,80
+handIndexFingerKnuckle,-20,20
+handIndexFingerIntermediateBase,0,90
+handIndexFingerIntermediateTip,0,90
+handMiddleFingerKnuckle,-20,20
+handMiddleFingerIntermediateBase,0,90
+handMiddleFingerIntermediateTip,0,90
+handRingFingerKnuckle,-20,20
+handRingFingerIntermediateBase,0,90
+handRingFingerIntermediateTip,0,90
+handLittleFingerKnuckle,-20,20
+handLittleFingerIntermediateBase,0,90
+handLittleFingerIntermediateTip,0,90 
