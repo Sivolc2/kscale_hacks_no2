@@ -68,7 +68,7 @@ class HandController:
                 if not self.command_queue.empty():
                     cmd, desired_state = self.command_queue.get()
                     self._send_command_direct(cmd, desired_state)
-                    time.sleep(0.02)  # 20ms delay between commands
+                    time.sleep(0.01)  # 20ms delay between commands
                 else:
                     time.sleep(0.01)  # Small sleep when queue is empty
             except Exception as e:

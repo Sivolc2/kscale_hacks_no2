@@ -16,25 +16,39 @@ Project HandVision enables natural robot control through Vision Pro hand trackin
 
 ### Environment Setup
 ```bash
-python 3.11.7
+python -v 
+3.11.7
+
+python -m venv backend_env
+source backend_env/bin/activate
 pip install -r requirements.txt
 ```
 
 ### Server Configuration Options
 
+## Run streaming from the backend
+
 #### Basic Setup (Hand Control Only)
 ```bash
-# Start with hand control
-python FlaskBackend/main.py --hand-port /dev/cu.usbmodem*
+# Start backend listening for headset updates
+python FlaskBackend/main.py --hand-port /dev/cu.usbmodem* --port 5005 --enable-hand-updates
+```
 
-# Enable IK processing
-python FlaskBackend/main.py --port 5005 --host 0.0.0.0 --enable-ik
+Toggle listening for movement events in the app
+```bash
+curl -X POST http://localhost:5005/toggle_hand_updates
+```
+
+Manual control using keyboard:
+```bash
+python FlaskBackend/hand_cli.py
 ```
 
 #### Full Robot Control Setup
 ```bash
 python FlaskBackend/main.py --port 5005 --host 0.0.0.0 --enable-ik --enable-robot --robot-ip 192.168.42.1
 ```
+
 
 ### Network Configuration
 

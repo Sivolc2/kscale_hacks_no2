@@ -54,5 +54,5 @@ void loop() {
       Serial.println("°)");
     }
   }
-  delay(15); // Small delay to prevent overwhelming the serial
+  delay(10); // Small delay to prevent overwhelming the serial
 }
