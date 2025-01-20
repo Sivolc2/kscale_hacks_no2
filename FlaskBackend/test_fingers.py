@@ -1,105 +1,113 @@
-from hand_interface import RoboticHand
+#!/usr/bin/env python3
+import requests
 import time
+import json
+import sys
 
-def test_individual_fingers():
-    """Test moving each finger individually within safe limits."""
-    # Note: Replace with your actual serial port
-    # Common ports:
-    # - Windows: 'COM3' (or similar)
-    # - Linux/Mac: '/dev/ttyUSB0' or '/dev/ttyACM0'
-    with RoboticHand(port='/dev/ttyUSB0') as hand:
-        print("Testing individual finger movements...")
-        
-        # Test sequence for each finger with safe limits
-        fingers = [
-            (hand.move_thumb, "Thumb", hand.SERVO_LIMITS['T']),
-            (hand.move_index, "Index", hand.SERVO_LIMITS['I']),
-            (hand.move_middle, "Middle", hand.SERVO_LIMITS['M']),
-            (hand.move_ring, "Ring", hand.SERVO_LIMITS['R']),
-            (hand.move_pinky, "Pinky", hand.SERVO_LIMITS['P']),
-            (hand.move_wrist, "Wrist", hand.SERVO_LIMITS['W'])
-        ]
-        
-        for move_func, name, (min_angle, max_angle) in fingers:
-            print(f"\nTesting {name}...")
-            print(f"Safe range: {min_angle}° to {max_angle}°")
-            
-            # Move to middle position first
-            mid_angle = (min_angle + max_angle) // 2
-            print(f"Moving {name} to middle position ({mid_angle}°)")
-            move_func(mid_angle)
-            time.sleep(1)
-            
-            # Close finger to max safe angle
-            print(f"Moving {name} to maximum safe position ({max_angle}°)")
-            move_func(max_angle)
-            time.sleep(1)
-            
-            # Open finger to min safe angle
-            print(f"Moving {name} to minimum safe position ({min_angle}°)")
-            move_func(min_angle)
-            time.sleep(1)
-            
-            # Return to neutral middle
-            print(f"Returning {name} to neutral")
-            move_func(mid_angle)
-            time.sleep(1)
-
-def test_wave():
-    """Test a smooth waving motion with all fingers."""
-    with RoboticHand(port='/dev/ttyUSB0') as hand:
-        print("\nPerforming gentle wave motion...")
-        
-        # Get the most restrictive angle limits across all fingers
-        min_angle = max(limit[0] for limit in hand.SERVO_LIMITS.values())
-        max_angle = min(limit[1] for limit in hand.SERVO_LIMITS.values())
-        
-        # Calculate safe wave range
-        wave_min = min_angle + 10
-        wave_max = max_angle - 10
-        
-        for _ in range(2):  # Wave 2 times
-            # Wave sequence with smaller increments for smoother motion
-            for angle in range(wave_min, wave_max, 15):  # Smaller steps
-                hand.move_thumb(angle)
-                time.sleep(0.05)  # Small delay between fingers
-                hand.move_index(angle)
-                time.sleep(0.05)
-                hand.move_middle(angle)
-                time.sleep(0.05)
-                hand.move_ring(angle)
-                time.sleep(0.05)
-                hand.move_pinky(angle)
-                time.sleep(0.05)
-            
-            for angle in range(wave_max, wave_min, -15):
-                hand.move_thumb(angle)
-                time.sleep(0.05)
-                hand.move_index(angle)
-                time.sleep(0.05)
-                hand.move_middle(angle)
-                time.sleep(0.05)
-                hand.move_ring(angle)
-                time.sleep(0.05)
-                hand.move_pinky(angle)
-                time.sleep(0.05)
-
-def main():
-    print("Starting hand movement tests (with safety limits)...")
+def test_finger_movement(base_url="http://localhost:5005"):
+    """Test individual finger movements through the API."""
     
-    try:
-        test_individual_fingers()
-        time.sleep(1)
-        test_wave()
+    # First enable hand updates
+    print("\nEnabling hand updates...")
+    response = requests.post(f"{base_url}/toggle_hand_updates", json={"enable": True})
+    if not response.ok:
+        print("Failed to enable hand updates!")
+        return False
+
+    # Test each finger individually
+    fingers = [
+        ("Thumb2", {"thumb": True, "indexFinger": False, "middleFinger": False, "ringFinger": False, "littleFinger": False}),
+        ("Index", {"thumb": False, "indexFinger": True, "middleFinger": False, "ringFinger": False, "littleFinger": False}),
+        ("Middle", {"thumb": False, "indexFinger": False, "middleFinger": True, "ringFinger": False, "littleFinger": False}),
+        ("Ring", {"thumb": False, "indexFinger": False, "middleFinger": False, "ringFinger": True, "littleFinger": False}),
+        ("Pinky", {"thumb": False, "indexFinger": False, "middleFinger": False, "ringFinger": False, "littleFinger": True})
+    ]
+
+    print("\nTesting individual finger movements...")
+    for finger_name, curl_state in fingers:
+        print(f"\nTesting {finger_name}...")
         
-    except KeyboardInterrupt:
-        print("\nTest interrupted by user")
-    except ValueError as e:
-        print(f"\nSafety limit exceeded: {str(e)}")
-    except Exception as e:
-        print(f"\nError occurred: {str(e)}")
+        # Close the finger
+        response = requests.post(
+            f"{base_url}/control_hand",
+            json={"rightHandCurl": curl_state}
+        )
+        
+        if response.ok:
+            result = response.json()
+            print(f"Close {finger_name} response: {json.dumps(result, indent=2)}")
+        else:
+            print(f"Failed to close {finger_name}: {response.status_code}")
+            return False
+            
+        time.sleep(1)  # Wait for movement to complete
+        
+        # Open the finger (invert all states)
+        open_state = {k: not v for k, v in curl_state.items()}
+        response = requests.post(
+            f"{base_url}/control_hand",
+            json={"rightHandCurl": open_state}
+        )
+        
+        if response.ok:
+            result = response.json()
+            print(f"Open {finger_name} response: {json.dumps(result, indent=2)}")
+        else:
+            print(f"Failed to open {finger_name}: {response.status_code}")
+            return False
+            
+        time.sleep(1)  # Wait for movement to complete
+
+    # Test all fingers together
+    print("\nTesting all fingers together...")
     
-    print("\nTests completed!")
+    # Close all fingers
+    all_closed = {"thumb": True, "indexFinger": True, "middleFinger": True, "ringFinger": True, "littleFinger": True}
+    response = requests.post(
+        f"{base_url}/control_hand",
+        json={"rightHandCurl": all_closed}
+    )
+    
+    if response.ok:
+        result = response.json()
+        print(f"Close all response: {json.dumps(result, indent=2)}")
+    else:
+        print(f"Failed to close all fingers: {response.status_code}")
+        return False
+        
+    time.sleep(2)  # Wait for movement to complete
+    
+    # Open all fingers
+    all_open = {"thumb": False, "indexFinger": False, "middleFinger": False, "ringFinger": False, "littleFinger": False}
+    response = requests.post(
+        f"{base_url}/control_hand",
+        json={"rightHandCurl": all_open}
+    )
+    
+    if response.ok:
+        result = response.json()
+        print(f"Open all response: {json.dumps(result, indent=2)}")
+    else:
+        print(f"Failed to open all fingers: {response.status_code}")
+        return False
+
+    print("\nAll tests completed successfully!")
+    return True
 
 if __name__ == "__main__":
-    main() 
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Test robotic hand finger movements')
+    parser.add_argument('--url', default='http://localhost:5005', help='Base URL of the Flask server')
+    
+    args = parser.parse_args()
+    
+    try:
+        test_finger_movement(args.url)
+    except requests.exceptions.ConnectionError:
+        print(f"\nError: Could not connect to server at {args.url}")
+        print("Make sure the Flask server is running and the URL is correct.")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nTest interrupted by user.")
+        sys.exit(0)

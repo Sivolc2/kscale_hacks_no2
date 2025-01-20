@@ -4,6 +4,7 @@ from hand_validator import HandValidator
 from hand_ik import HandIK
 from robot_control import RobotController
 from sim_processor import SimProcessor
+from hand_cli import HandController  # Import the HandController
 import argparse
 import json
 import os
@@ -21,12 +22,26 @@ ik_processor = HandIK(connect_robot=False)  # Don't connect to robot for IK proc
 robot_controller = None  # Initialize later if robot control is enabled
 sim_processor = SimProcessor()  # Initialize the simulation processor
 
+# Initialize hand controller (will be set up in run_server)
+hand_controller = None
+enable_hand_updates = False  # Flag to control hand updates from VR data
+
+# Store latest headset data
+latest_headset_data = None
+latest_headset_timestamp = None
+
 def log_request(endpoint, data=None):
     """Log incoming requests with timestamp and data."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    print(f"\n[{timestamp}] Received request to {endpoint}")
-    if data:
-        print(f"Request data: {json.dumps(data, indent=2)}")
+    # Only print curl data, comment out detailed request data
+    if endpoint == '/control_hand':
+        print(f"\n[{timestamp}] Received request to {endpoint}")
+        if data:
+            print(f"Request data: {json.dumps(data, indent=2)}")
+    # else:
+    #     print(f"\n[{timestamp}] Received request to {endpoint}")
+    #     if data:
+    #         print(f"Request data: {json.dumps(data, indent=2)}")
 
 def generate_circular_motion():
     """Generate circular motion data for the robot arm."""
@@ -222,6 +237,11 @@ def move_simbot_headset():
         # Basic validation of input format
         if "hands" not in data:
             return jsonify({"error": "Missing 'hands' data"}), 400
+        
+        # Store the latest data with timestamp
+        global latest_headset_data, latest_headset_timestamp
+        latest_headset_data = data
+        latest_headset_timestamp = datetime.now().isoformat()
             
         # Process the headset data
         result = sim_processor.process_headset_data(data)
@@ -234,13 +254,117 @@ def move_simbot_headset():
             "details": "Error processing headset data"
         }), 400
 
+@app.route('/get_latest_headset_data', methods=['GET'])
+def get_latest_headset_data():
+    """Get the most recent headset data received by move_simbot_headset."""
+    if latest_headset_data is None:
+        return jsonify({
+            "error": "No headset data available yet"
+        }), 404
+        
+    return jsonify({
+        "data": latest_headset_data,
+        "timestamp": latest_headset_timestamp,
+        "age_seconds": (datetime.now() - datetime.fromisoformat(latest_headset_timestamp)).total_seconds()
+    }), 200
+
+@app.route('/control_hand', methods=['POST'])
+def control_hand():
+    """Control the hand directly from headset finger state data.
+    VR format: true = closed, false = open
+    Expected fields: thumb, indexFinger, middleFinger, ringFinger, littleFinger"""
+    log_request('/control_hand', request.get_json() if request.is_json else None)
+    
+    if not hand_controller:
+        return jsonify({"error": "Hand controller not initialized"}), 500
+        
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 400
+        
+    try:
+        data = request.get_json()
+        
+        # Validate input format
+        if 'rightHandCurl' not in data:
+            return jsonify({"error": "Missing rightHandCurl data"}), 400
+        
+        curl_data = data['rightHandCurl']
+        required_fields = ['thumb', 'indexFinger', 'middleFinger', 'ringFinger', 'littleFinger']
+        missing_fields = [field for field in required_fields if field not in curl_data]
+        if missing_fields:
+            return jsonify({"error": f"Missing required fields: {missing_fields}"}), 400
+        
+        # Map VR curl data to finger commands
+        # VR: true = closed, false = open
+        # Arduino: true = open, false = closed (we invert the VR state)
+        # Note: Thumb is reversed compared to other fingers
+        finger_mapping = [
+            ('q', curl_data['thumb']),           # thumb2 (pin 3) - NOT inverted because thumb is reversed
+            ('w', True),                         # thumb1 (pin 5) - not controlled by VR
+            ('e', curl_data['indexFinger']), # index (pin 6)
+            ('r', curl_data['middleFinger']),# middle (pin 9)
+            ('t', curl_data['ringFinger']),  # ring (pin 10)
+            ('y', curl_data['littleFinger']) # pinky (pin 11)
+        ]
+        
+        responses = []
+        if enable_hand_updates:
+            # Send commands to set each finger to desired state
+            for key, desired_state in finger_mapping:
+                if key == 'w':  # Skip thumb1 rotation as it's not controlled by VR
+                    continue
+                hand_controller.set_finger_state(key, desired_state)
+                responses.append(f"Set finger {key} to {'open' if desired_state else 'closed'}")
+        
+        return jsonify({
+            "success": True,
+            "actions": responses if enable_hand_updates else [],
+            "hand_updates_enabled": enable_hand_updates,
+            "current_states": hand_controller.finger_states,
+            "desired_states": [state for _, state in finger_mapping],
+            "vr_states": curl_data  # Original VR data for debugging
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "details": "Error controlling hand"
+        }), 400
+
+@app.route('/toggle_hand_updates', methods=['POST'])
+def toggle_hand_updates():
+    """Toggle whether VR data updates the hand position."""
+    global enable_hand_updates
+    
+    try:
+        data = request.get_json() if request.is_json else {}
+        if 'enable' in data:
+            enable_hand_updates = bool(data['enable'])
+        else:
+            enable_hand_updates = not enable_hand_updates
+            
+        return jsonify({
+            "success": True,
+            "hand_updates_enabled": enable_hand_updates
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "details": "Error toggling hand updates"
+        }), 400
+
 def run_server(enable_ik: bool = False, plot_ik: bool = False, 
               enable_robot: bool = False, robot_ip: str = '192.168.42.1',
-              port: int = 5001, host: str = '0.0.0.0', ssl_context=None):
+              port: int = 5001, host: str = '0.0.0.0', ssl_context=None,
+              hand_port: str = None, enable_updates: bool = False):
     """Run the Flask server"""
     app.config['ENABLE_IK'] = enable_ik
     app.config['PLOT_IK'] = plot_ik
     app.config['ENABLE_ROBOT'] = enable_robot
+    
+    global enable_hand_updates
+    enable_hand_updates = enable_updates
     
     # Initialize robot controller if enabled
     global robot_controller
@@ -251,6 +375,16 @@ def run_server(enable_ik: bool = False, plot_ik: bool = False,
         except Exception as e:
             print(f"Warning: Failed to connect to robot at {robot_ip}: {e}")
             print("Robot control will be disabled")
+    
+    # Initialize hand controller if port specified
+    global hand_controller
+    if hand_port:
+        try:
+            hand_controller = HandController(port=hand_port)
+            print(f"Hand controller enabled, connected to {hand_port}")
+        except Exception as e:
+            print(f"Warning: Failed to connect to hand on {hand_port}: {e}")
+            print("Hand control will be disabled")
     
     # Print server info
     protocol = "https" if ssl_context else "http"
@@ -284,6 +418,9 @@ if __name__ == '__main__':
     parser.add_argument('--host', default='0.0.0.0', help='Host to bind to')
     parser.add_argument('--ssl-cert', help='Path to SSL certificate file')
     parser.add_argument('--ssl-key', help='Path to SSL private key file')
+    parser.add_argument('--hand-port', help='Serial port for hand controller')
+    parser.add_argument('--enable-hand-updates', action='store_true', 
+                       help='Enable hand position updates from VR data')
     
     args = parser.parse_args()
     
@@ -302,5 +439,7 @@ if __name__ == '__main__':
         robot_ip=args.robot_ip,
         port=args.port,
         host=args.host,
-        ssl_context=ssl_context
+        ssl_context=ssl_context,
+        hand_port=args.hand_port,
+        enable_updates=args.enable_hand_updates
     )

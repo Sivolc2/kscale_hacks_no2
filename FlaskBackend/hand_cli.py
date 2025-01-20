@@ -1,118 +1,165 @@
-from hand_interface import RoboticHand
-import argparse
+#!/usr/bin/env python3
+import serial
 import sys
+import tty
+import termios
 import time
 import glob
 import serial.tools.list_ports
-
-FINGER_MAP = {
-    'thumb': ('T', "Thumb"),
-    'index': ('I', "Index"),
-    'middle': ('M', "Middle"),
-    'ring': ('R', "Ring"),
-    'pinky': ('P', "Pinky"),
-    'wrist': ('W', "Wrist")
-}
+from queue import Queue
+from threading import Thread, Lock
 
 def find_arduino_port():
-    """Find the most likely Arduino port."""
-    # List all ports
+    """Find the Arduino port on macOS."""
+    # First try to find Arduino by checking port descriptions
     ports = list(serial.tools.list_ports.comports())
-    
-    # Search for common Arduino identifiers
     for port in ports:
-        # Common Arduino descriptions
         if any(id in port.description.lower() for id in ['arduino', 'usb serial', 'cu.usbmodem']):
             return port.device
-            
-    # On MacOS, try common patterns
+    
+    # If not found by description, try common macOS patterns
     if sys.platform == 'darwin':
-        # Try common Mac Arduino ports
         possible_ports = glob.glob('/dev/cu.usbmodem*') + glob.glob('/dev/cu.usbserial*')
         if possible_ports:
             return possible_ports[0]
     
-    # If no Arduino found, list available ports
+    # If still not found, show available ports
     if ports:
         print("\nAvailable ports:")
         for port in ports:
             print(f"- {port.device}: {port.description}")
-    else:
-        print("\nNo serial ports found. Is the Arduino connected?")
     
-    return None
+    return '/dev/cu.usbmodem*'  # Default macOS pattern
 
-def test_angle(port: str, finger: str, angle: int) -> None:
-    """
-    Test a specific angle for a finger.
-    
-    Args:
-        port: Serial port for the Arduino
-        finger: Which finger to move
-        angle: Exact angle to test (0-180)
-    """
-    if finger not in FINGER_MAP:
-        print(f"Invalid finger. Choose from: {', '.join(FINGER_MAP.keys())}")
-        return
+class HandController:
+    def __init__(self, port=None, baud_rate=9600):
+        """Initialize the hand controller with the specified serial port."""
+        if port is None:
+            port = find_arduino_port()
         
-    servo_id, finger_name = FINGER_MAP[finger]
-    
+        try:
+            self.ser = serial.Serial(port, baud_rate, timeout=1)
+            time.sleep(2)  # Wait for Arduino to reset
+            print(f"Connected to Arduino on {port}")
+            # Initialize finger states (False = closed, True = open)
+            self.finger_states = [False] * 6  # Updated to 6 for both thumb servos
+            self.finger_names = ["Thumb2", "Thumb1", "Index", "Middle", "Ring", "Pinky"]
+            self.finger_keys = ['q', 'w', 'e', 'r', 't', 'y']
+            
+            # Initialize command queue and processing thread
+            self.command_queue = Queue()
+            self.state_lock = Lock()
+            self.running = True
+            self.command_thread = Thread(target=self._process_command_queue, daemon=True)
+            self.command_thread.start()
+            
+        except serial.SerialException as e:
+            print(f"Error opening serial port {port}: {e}")
+            print("\nTroubleshooting tips:")
+            print("1. Make sure the Arduino is connected")
+            print("2. Check if the Arduino shows up in System Information")
+            print("3. Verify the Arduino has the correct sketch uploaded")
+            sys.exit(1)
+
+    def _process_command_queue(self):
+        """Process commands from the queue with proper timing."""
+        while self.running:
+            try:
+                if not self.command_queue.empty():
+                    cmd, desired_state = self.command_queue.get()
+                    self._send_command_direct(cmd, desired_state)
+                    time.sleep(0.02)  # 20ms delay between commands
+                else:
+                    time.sleep(0.01)  # Small sleep when queue is empty
+            except Exception as e:
+                print(f"Error processing command queue: {e}")
+
+    def _send_command_direct(self, cmd, desired_state=None):
+        """Internal method to directly send command to Arduino."""
+        try:
+            finger_index = self.finger_keys.index(cmd.lower())
+            
+            # If desired_state is provided, only send command if needed
+            if desired_state is not None:
+                with self.state_lock:
+                    current_state = self.finger_states[finger_index]
+                    if current_state == desired_state:
+                        return  # State already matches, no need to send command
+            
+            self.ser.write(cmd.encode())
+            response = self.ser.readline().decode().strip()
+            if response:
+                print(response)
+                # Update local state based on Arduino response
+                with self.state_lock:
+                    self.finger_states[finger_index] = not self.finger_states[finger_index]
+                    self.display_status()
+        except serial.SerialException as e:
+            print(f"Error sending command: {e}")
+
+    def send_command(self, cmd, desired_state=None):
+        """Queue a command to be sent to the Arduino."""
+        self.command_queue.put((cmd, desired_state))
+            
+    def set_finger_state(self, finger_key, desired_state):
+        """Set a specific finger to a desired state (True = open, False = closed)"""
+        if finger_key in self.finger_keys:
+            self.send_command(finger_key, desired_state)
+
+    def display_status(self):
+        """Display the current status of all fingers."""
+        print("\nHand Status:")
+        for i, (name, state) in enumerate(zip(self.finger_names, self.finger_states)):
+            status = "OPEN" if state else "closed"
+            print(f"{name} ({self.finger_keys[i].upper()}): {status}")
+        print()  # Empty line for readability
+
+    def close(self):
+        """Close the serial connection."""
+        self.running = False
+        if self.command_thread.is_alive():
+            self.command_thread.join(timeout=1.0)
+        if hasattr(self, 'ser') and self.ser.is_open:
+            self.ser.close()
+
+def get_char():
+    """Get a single character from the terminal without waiting for enter."""
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
     try:
-        with RoboticHand(port=port) as hand:
-            print(f"Moving {finger_name} to {angle}°...")
-            
-            # Move to position
-            move_func = getattr(hand, f"move_{finger}")
-            success = move_func(angle)
-            
-            if success:
-                print(f"✓ {finger_name} moved to {angle}°")
-            else:
-                print(f"✗ Failed to move {finger_name}")
-                
-    except serial.SerialException as e:
-        print(f"Serial connection error: {str(e)}")
-        print("\nTroubleshooting tips:")
-        print("1. Make sure the Arduino is connected")
-        print("2. Check if the correct port is selected")
-        print("3. Verify the Arduino has the correct sketch uploaded")
-        
-        # Try to help with port selection
-        found_port = find_arduino_port()
-        if found_port and found_port != port:
-            print(f"\nTry using this port instead: {found_port}")
-            print(f"Command: python hand_cli.py {finger} {angle} --port {found_port}")
-    except ValueError as e:
-        print(f"Error: {str(e)}")
-    except Exception as e:
-        print(f"Error: {str(e)}")
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Test servo angles directly',
-        formatter_class=argparse.RawTextHelpFormatter
-    )
+    print("Hand Controller CLI")
+    print("Controls:")
+    print("Q: Thumb2 (second joint)")
+    print("W: Thumb1 (first joint)")
+    print("E: Index finger")
+    print("R: Middle finger")
+    print("T: Ring finger")
+    print("Y: Pinky finger")
+    print("X: Exit")
+    print("\nPress any key to toggle finger position")
     
-    parser.add_argument('finger', choices=FINGER_MAP.keys(),
-                      help='Which finger to move\n' + 
-                           '\n'.join(f'  {k}: {v[1]}' for k, v in FINGER_MAP.items()))
-                      
-    parser.add_argument('angle', type=int,
-                      help='Angle to move to (0-180)')
+    controller = HandController()  # Will auto-detect port
+    controller.display_status()  # Show initial status
     
-    # Try to find Arduino port first
-    default_port = find_arduino_port() or '/dev/ttyUSB0'
-    parser.add_argument('--port', default=default_port,
-                      help=f'Serial port for Arduino (default: {default_port})')
-    
-    args = parser.parse_args()
-    
-    # Validate angle
-    if not 0 <= args.angle <= 180:
-        print("Error: Angle must be between 0 and 180 degrees")
-        return
-        
-    test_angle(args.port, args.finger, args.angle)
+    try:
+        while True:
+            char = get_char()
+            if char.lower() == 'x':
+                break
+            if char.lower() in ['q', 'w', 'e', 'r', 't', 'y']:  # Added 'y' for pinky
+                controller.send_command(char.lower())
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    finally:
+        controller.close()
 
 if __name__ == "__main__":
     main()
+    
